@@ -6,7 +6,10 @@ image:
     feature: /cover/tempcover.jpg
 ---
 
-<div class="tiles">
+<div class="tile">
+  <h2 class="post-title">更多</h2>
+  <p class="post-excerpt">欢迎访问我的 <a href="https://github.com/HuskyTGame">Github</a>, 和<a href="https://huskytgame.github.io/">个人网站</a>, 更多信息待更新。</p>
+</div><!-- /.tile -->
 <div class="tiles">
 {% for post in site.posts %}
 	{% include post-grid.html %}
@@ -17,3 +20,4 @@ image:
   <h2 class="post-title">更多</h2>
   <p class="post-excerpt">欢迎访问我的 <a href="https://github.com/HuskyTGame">Github</a>, 和<a href="https://huskytgame.github.io/">个人网站</a>, 更多信息待更新。</p>
 </div><!-- /.tile -->
+
