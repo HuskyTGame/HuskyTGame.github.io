@@ -2,7 +2,7 @@
 layout: archive
 permalink: /unity/
 title: "Unity"
-excerpt: "Dedicate all my life to my love."
+excerpt: "Dedicate all my life to my love"
 ---
 
 <div class="tiles">
