@@ -1,8 +1,8 @@
 # Site wide configuration
 
 title: "HuskyT Game Blog"
-description: "Dedicate all my life to my love."
-logo: MyLifeImg.jpg # 120x120 px default image used for Twitter summary card
+description: "Dedicate all my life to my love"
+logo: bio-photo.jpg # 120x120 px default image used for Twitter summary card
 teaser: MyLifeImg.jpg # 400x250 px default teaser image used in image archive grid
 locale: 
 url: "https://huskytgame.github.io/"
