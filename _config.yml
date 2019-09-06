@@ -2,8 +2,8 @@
 
 title: "HuskyT Game Blog"
 description: "Dedicate all my life to my love."
-logo: MyLifeImg.jpeg # 120x120 px default image used for Twitter summary card
-teaser: MyLifeImg.jpeg # 400x250 px default teaser image used in image archive grid
+logo: MyLifeImg.jpg # 120x120 px default image used for Twitter summary card
+teaser: MyLifeImg.jpg # 400x250 px default teaser image used in image archive grid
 locale: en
 url:
 feed:
