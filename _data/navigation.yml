@@ -15,6 +15,11 @@
   excerpt: "Shader"
   image: /navigation/ShaderImg.jpg
   
+  - title: Framework
+  url: /framework/
+  excerpt: "框架"
+  image: /navigation/FrameworkImg.jpg
+  
   - title: Game
   url: /game/
   excerpt: "游戏"
