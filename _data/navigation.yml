@@ -5,17 +5,17 @@
   excerpt: "Unity学习笔记"
   image: UnityImg.jpg
   
-- title: UnityShader
-  url: /unityshader/
-  excerpt: "UnityShader学习笔记"
-  image: UnityShaderImg.png
+- title: Shader
+  url: /shader/
+  excerpt: "Shader学习笔记"
+  image: ShaderImg.png
   
 - title: Others
   url: /others/
   excerpt: "杂记"
   image: OthersImg.jpeg
   
-- title: AboutMe
-  url: /aboutme/
+- title: About
+  url: /about/
   excerpt: "介绍"
   image: bio-photo.jpg
