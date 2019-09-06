@@ -1,4 +1,22 @@
 # Footer navigation links
 
-- title:
-  url:
+- title: Home
+  url: /
+
+- title: Basics
+  url: /basics/
+
+- title: Unity
+  url: /unity/
+  
+- title: Shader
+  url: /shader/
+  
+  - title: Game
+  url: /game/
+  
+- title: Others
+  url: /others/
+  
+- title: AboutMe
+  url: /aboutme/
