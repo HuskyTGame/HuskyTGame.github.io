@@ -13,6 +13,9 @@ image:
   <p class="post-excerpt">欢迎访问我的 <a href="https://github.com/HuskyTGame">Github</a>, 和<a href="https://huskytgame.github.io/">个人网站</a>, 更多信息待更新。</p>
 </div><!-- /.tile -->
 
+</div><!-- /.tiles -->
+
+<div class="tiles">
 {% for post in site.posts %}
 	{% include post-grid.html %}
 {% endfor %}
