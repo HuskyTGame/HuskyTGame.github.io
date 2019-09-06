@@ -1,21 +1,31 @@
 # Site navigation links
 
+- title: Basics
+  url: /basics/
+  excerpt: "基础"
+  image: /navigation/BasicsImg.jpg
+
 - title: Unity
   url: /unity/
-  excerpt: "Unity学习笔记"
-  image: UnityImg.jpg
+  excerpt: "Unity"
+  image: /navigation/UnityImg.jpg
   
 - title: Shader
   url: /shader/
-  excerpt: "Shader学习笔记"
-  image: ShaderImg.png
+  excerpt: "Shader"
+  image: /navigation/ShaderImg.jpg
+  
+  - title: Game
+  url: /game/
+  excerpt: "游戏"
+  image: /navigation/GameImg.jpg
   
 - title: Others
   url: /others/
   excerpt: "杂记"
-  image: OthersImg.jpeg
+  image: /navigation/OthersImg.jpg
   
-- title: About
-  url: /about/
+- title: AboutMe
+  url: /aboutme/
   excerpt: "介绍"
-  image: bio-photo.jpg
+  image: /navigation/aboutmeImg.jpg
