@@ -1,7 +1,7 @@
 ---
 layout: archive
 permalink: /
-title: "Latest Posts1"
+title: "Latest Posts"
 image: 
     feature: /cover/tempcover.jpg
 ---
