@@ -2,8 +2,8 @@
 
 title: "HuskyT Game Blog"
 description: "Dedicate all my life to my love"
-logo: bio-photo.jpg # 120x120 px default image used for Twitter summary card
-teaser: MyLifeImg.jpg # 400x250 px default teaser image used in image archive grid
+logo: logo.jpg # 120x120 px default image used for Twitter summary card
+teaser: logo.jpg # 400x250 px default teaser image used in image archive grid
 locale: 
 url: "https://huskytgame.github.io/"
 feed:
@@ -28,12 +28,12 @@ gems:
 owner:
   name: HuskyT(唐韡)
   email: 18171223217@163.com
-  twitter:
-  google:
+  #twitter:
+  #google:
     ad-client:
     ad-slot:
   bio:
-  avatar: bio-photo.jpg # 160x160 px image for author byline
+  avatar: logo.jpg # 160x160 px image for author byline
   disqus-shortname: HuskyT
 
 
