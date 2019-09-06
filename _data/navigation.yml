@@ -15,12 +15,12 @@
   excerpt: "着色器"
   image: navigation/ShaderImg.jpg
   
-  - title: Framework
+- title: Framework
   url: /framework/
   excerpt: "框架"
   image: navigation/FrameworkImg.jpg
   
-  - title: Game
+- title: Game
   url: /game/
   excerpt: "游戏"
   image: navigation/GameImg.jpg
