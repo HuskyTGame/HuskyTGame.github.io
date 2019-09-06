@@ -1,15 +1,16 @@
 ---
 layout: archive
-permalink: /
-title: "Shader学习笔记"
+permalink: /shader/
+title: "着色器"
+excerpt: "Dedicate all my life to my love"
 ---
 
 <div class="tiles">
-{% for post in site.categories.shader %}
-	{% include post-grid.html %}
+{% for post in site.posts %}
+	{% if post.categories contains 'shader' %}
+		{% include post-grid.html %}
+	{% endif %}
 {% endfor %}
 </div><!-- /.tiles -->
-
-
 
 
