@@ -3,7 +3,7 @@
 title: "HuskyT Game Blog"
 description: "Dedicate all my life to my love"
 logo: logo.jpg # 120x120 px default image used for Twitter summary card
-teaser: logo.jpg # 400x250 px default teaser image used in image archive grid  
+teaser: DefaultTeaser.jpg # 400x250 px default teaser image used in image archive grid  
 locale: 
 url: "https://huskytgame.github.io/"
 feed:
