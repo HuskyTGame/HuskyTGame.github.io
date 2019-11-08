@@ -15,7 +15,7 @@
   excerpt: "着色器"
   image: navigation/ShaderImg.jpg
   
-  - title: AI
+  - title: Game AI
   url: /ai/
   excerpt: "游戏AI"
   image: navigation/AIImg.jpg
