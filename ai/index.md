@@ -1,7 +1,7 @@
 ---
 layout: archive
 permalink: /ai/
-title: "Game AI"
+title: "GameAI"
 excerpt: "Dedicate all my life to my love"
 ---
 
