@@ -245,4 +245,239 @@ Flee逃离行为：对象在接近目标（障碍物）时，会有一个引导�
 
 ## 五、Wander随机徘徊
 
-![GIF4](https://huskytgame.github.io/images/in-post/ai/2019-11-07-AI基础--Behavior/WanderBehavior.gif)
+对象在没有目标的情况下，通常会进行随机移动，随机移动的实现方式有很多种。比如说以随机的时间间隔设置随机目标，但用此方法对象通常会进行大幅度的转向，很多时候看起来会很奇怪，就好像一个人一会儿向前走，一会儿又后退，这种交替前进后退如果太过频繁看起来就显得有违常理。
+
+此方法的便捷之处在于实现简单，结合之前的*Seek*和*Arrival*行为可快速实现。
+
+添加*RandomTarget*脚本来生成随机目标：
+
+````csharp
+    public class RandomTarget : MonoBehaviour
+    {
+        [Tooltip("随机目标的范围半径")]
+        public float Radius;
+        private Vector3 mPos = default;
+        public Vector3 Pos
+        {
+            get
+            {
+                mPos = Random.insideUnitSphere * Radius;
+                return mPos;
+            }
+            private set { mPos = value; }
+        }
+        private void OnDrawGizmos()
+        {
+            if (mPos == default) return;
+            Gizmos.color = Color.black;
+            Gizmos.DrawSphere(new Vector3(mPos.x, 0.01f, mPos.z), 0.1f);
+        }
+    }
+````
+
+随机移动的脚本：
+
+````csharp
+    public class RandomSeekBehavior : MonoBehaviour
+    {
+        public RandomTarget RandomTarget;
+        public float MaxVelocity;
+        public float MaxForceValue;
+        public float Mass;
+        [Tooltip("到达目的地前的减速半径")]
+        public float DecelerateRadius = 2f;
+        
+        private Vector3 mDesiredVelocity;
+        private Vector3 mCurrentVelocity;
+        private Vector3 mSteerForce;
+        private Vector3 mDesiredDir;
+        private float mDesiredDis;
+        private float mInterval;
+        private float mTimer;
+        private Vector3 mTargetPos = default;
+
+        private void Start()
+        {
+            mInterval = UnityEngine.Random.Range(1f, 2f);
+        }
+        private void FixedUpdate()
+        {
+            mTimer += Time.fixedDeltaTime;
+            if (mTimer >= mInterval)
+            {
+                mTimer -= mInterval;
+                mInterval = UnityEngine.Random.Range(1f, 2f);
+                Vector3 pos = RandomTarget.Pos;
+                mTargetPos = new Vector3(pos.x, 0f, pos.z);
+            }
+            Seek(mTargetPos);
+        }
+        /// <summary>
+        /// 寻求：通过Steer引导力使对象平滑转向移动
+        /// </summary>
+        private void Seek(Vector3 targetPos)
+        {
+            mDesiredDir = targetPos - transform.position;//期望方向：指向鼠标点击方向
+            mDesiredDis = mDesiredDir.magnitude;//期望距离
+            if (mDesiredDis <= DecelerateRadius)//减速
+            {
+                mDesiredVelocity = Vector3.Normalize(targetPos - transform.position) * MaxVelocity * mDesiredDis / DecelerateRadius;//到达目标点后速度为零
+            }
+            else//正常移动
+            {
+                mDesiredVelocity = Vector3.Normalize(targetPos - transform.position) * MaxVelocity;
+            }
+            mSteerForce = Vector3.ClampMagnitude(mDesiredVelocity - mCurrentVelocity, MaxForceValue);//引导力：由当前运动方向引导向期望方向
+            mSteerForce /= Mass;//引导力=>加速度
+            mCurrentVelocity = Vector3.ClampMagnitude(mCurrentVelocity + mSteerForce, MaxVelocity);//更新当前速度：受引导力影响后的速度
+            transform.position += mCurrentVelocity * Time.fixedDeltaTime;//更新位置
+        }
+    }
+````
+
+效果如下：
+
+![GIF4](https://huskytgame.github.io/images/in-post/ai/2019-11-07-AI基础--Behavior/RandomSeekBehavior.gif)
+
+对象随机移动在每一次目标改变的时候都显得很突兀，改进的方式是加快对象移动方向改变的频率，使得对象在每一帧都改变移动方向，且每一次改变的方向大小均在45度以内。如此一来，对象的随机移动就会显得十分平滑。
+
+如何控制对象移动方向的改变呢？方法和上述一样，通过力来改变对象运动方向，称此力为*WanderForce*随机徘徊力。可以想象对象前方有一个圆圈，圆心就在对象当前移动方向上，而对象与圆上随机一点的连线就是随机徘徊力。如下图所示：
+
+![picture5](https://huskytgame.github.io/images/in-post/ai/2019-11-07-AI基础--Behavior/ScreenShot005.png)
+
+代码：
+
+````csharp
+    /*
+     * 在对象前增加一个指示运动方向的圆
+     * 限制了对象每一帧运动方向改变的大小，防止对象随机徘徊中运行方向突变超过45度。
+     */
+    public class WanderBehavior : MonoBehaviour
+    {
+        /*
+         * 如果mCircleDistance>>mCircleRadius时，
+         * mWanderForce对速度的影响可忽略不计，
+         * 即对象不改变移动方向
+         */
+        [SerializeField, Tooltip("圆心到对象的距离"), Range(1f, 5f)]
+        private float mCircleDistance = 2f;
+        [SerializeField, Tooltip("圆半径")]
+        private float mCircleRadius = 1f;
+        [SerializeField, Tooltip("质量")]
+        private float mMass = 1f;
+        private Vector3 mCurrentVelocity;
+        [SerializeField, Tooltip("最大速度"), Range(0.1f, 8f)]
+        private float mMaxVelocity = 5f;
+        /// <summary>
+        /// 指向圆心方向
+        /// </summary>
+        private Vector3 mCircleCenterVector3;
+        /// <summary>
+        /// 位移的力（与圆半径正比例）
+        /// </summary>
+        private Vector3 mDisplacementForce;
+        /// <summary>
+        /// 位移力的方向
+        /// </summary>
+        private Vector3 mDisplacementDir;
+        /// <summary>
+        /// 顺时针方向的夹角
+        /// </summary>
+        private float mCurrentAngle;
+        private Vector3 mWanderForce;
+        //[SerializeField, Tooltip("最大随机徘徊力")]
+        //private float mMaxWanderForce = 5f;
+        private SpawnZone Spawner;
+
+        private void Start()
+        {
+            Vector3 randomV3 = Random.onUnitSphere;
+            //Vector3 randomV3 = new Vector3(0f, 0f, 1f);
+            mCurrentVelocity = Vector3.ClampMagnitude(new Vector3(randomV3.x, 0f, randomV3.z), mMaxVelocity);
+            mDisplacementDir = new Vector3(0f, 0f, 1f);//默认指向Z轴正方向
+            mCurrentAngle = 0f;
+            Spawner = GameObject.FindWithTag("SpawnZone").GetComponent<SpawnZone>();
+        }
+        private void Update()
+        {
+            if (Vector3.Distance(transform.position, Vector3.zero) > Spawner.Radius)
+            {
+                Spawner.Recycle(transform);
+            }
+        }
+        private void FixedUpdate()
+        {
+            Wander();
+        }
+        private void Wander()
+        {
+            //指向圆心方向：
+            mCircleCenterVector3 = mCurrentVelocity.normalized * mCircleDistance;
+            //位移力：
+            SetAngle(out mDisplacementDir, mCurrentAngle);
+            mDisplacementForce = mDisplacementDir * mCircleRadius;
+            //随机徘徊力：
+            //随机徘徊力不受最大随机徘徊力影响，只受mCircleDistance、mCircleRadius、mDisplacementDir影响
+            //mWanderForce = Vector3.ClampMagnitude(mCircleCenterVector3 + mDisplacementForce, mMaxWanderForce);
+            mWanderForce = mCircleCenterVector3 + mDisplacementForce;
+            mWanderForce /= mMass;//随机徘徊力=>加速度
+            mCurrentVelocity = Vector3.ClampMagnitude(mCurrentVelocity + mWanderForce, mMaxVelocity);//更新当前速度：受随机徘徊力影响后的速度
+            transform.position += mCurrentVelocity * Time.fixedDeltaTime;//更新位置
+            //更新
+            mCurrentAngle = Random.Range(0f, 2f * Mathf.PI);
+        }
+        private void SetAngle(out Vector3 vec, float angle)
+        {
+            vec = new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle)) * mCircleRadius;
+        }
+    }
+````
+
+创建多个小球来展示随机徘徊，创建代码：（超出生成半径会回收并在原点重新创建）
+
+````csharp
+    public class SpawnZone : MonoBehaviour
+    {
+        [SerializeField, Tooltip("生成数量")]
+        private int mSpawnCount = 3;
+        [SerializeField, Tooltip("生成半径")]
+        private float mRadius = 5f;
+        [SerializeField, Tooltip("待生成对象")]
+        private GameObject mPrefab = default;
+        /// <summary>
+        /// 缓存生成出来的对象
+        /// </summary>
+        private List<Transform> ObjectList;
+        /// <summary>
+        /// 生成半径
+        /// </summary>
+        public float Radius => mRadius;
+
+        private void Start()
+        {
+            ObjectList = new List<Transform>();
+            for (int i = 1; i <= mSpawnCount; i++)
+            {
+                Spawn();
+            }
+        }
+        public void Spawn()
+        {
+            GameObject go = Instantiate(mPrefab, Vector3.zero, Quaternion.identity, transform);
+            ObjectList.Add(go.transform);
+        }
+        public void Recycle(Transform obj)
+        {
+            ObjectList.Remove(obj);
+            Spawn();
+            Destroy(obj.gameObject);
+        }
+    }
+````
+
+效果如下：
+
+![GIF5](https://huskytgame.github.io/images/in-post/ai/2019-11-07-AI基础--Behavior/WanderBehavior.gif)
+
+## 六、Pursuit追踪
+
