@@ -245,3 +245,4 @@ Flee逃离行为：对象在接近目标（障碍物）时，会有一个引导�
 
 ## 五、Wander随机徘徊
 
+![GIF4](https://huskytgame.github.io/images/in-post/ai/2019-11-07-AI基础--Behavior/WanderBehavior.gif)
