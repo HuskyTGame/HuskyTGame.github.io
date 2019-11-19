@@ -1046,3 +1046,79 @@ Flee逃离行为：对象在接近目标（障碍物）时，会有一个引导�
 
 ![GIF8](https://huskytgame.github.io/images/in-post/ai/2019-11-07-AI基础--Behavior/AvoidanceBehavior.gif)
 
+## 十、PathFollowing路径跟随
+
+使用List存储路径节点，结合Seek行为完成路径跟随。
+
+``mPathRadius``路径节点半径：只要对象达到半径范围以内则视作其到达了路径节点，可以前往下一个路径节点。如此一来可以使得路径跟随行为更符合常理--总会在既定的路径中寻找较短的路线移动。
+
+![picture8](https://huskytgame.github.io/images/in-post/ai/2019-11-07-AI基础--Behavior/ScreenShot008.png)
+
+代码：
+
+````csharp
+        [SerializeField, Tooltip("路径节点半径"), Range(0f, 5f)]
+        private float mPathRadius = 1f;
+        private List<PathNode> mPaths = new List<PathNode>();
+        private int mCurrentPathNode;
+        /// <summary>
+        /// 路径步长
+        /// </summary>
+        private int mPathsStep = -1;
+
+        public List<PathNode> Paths
+        {
+            get
+            {
+                Debug.Assert(mPaths != null && mPaths.Count > 0, "未设置移动管理器中的移动路径Paths！");
+                return mPaths;
+            }
+            set
+            {
+                if (mPaths == null)
+                {
+                    mPaths = new List<PathNode>();
+                }
+                mPaths = value;
+            }
+        }
+        ......
+        private void AddBehavior(AIBehaviorType behavior)
+        {
+            switch (behavior)
+            {
+                ......
+                case AIBehaviorType.PathsFollow:
+                    AddSteerForce(CalculatePathsFollow());
+                    break;
+                default:
+                    Debug.Assert(false, "尚未处理添加" + behavior + "行为的逻辑！");
+                    break;
+            }
+        }
+		......
+        /// <summary>
+        /// 路径跟随行为
+        /// </summary>
+        private Vector3 CalculatePathsFollow()
+        {
+            if (Vector3.Distance(transform.position, Paths[mCurrentPathNode].transform.position) < mPathRadius)
+            {
+                if (mCurrentPathNode >= mPaths.Count - 1 || mCurrentPathNode <= 0)//循环移动
+                {
+                    mPathsStep *= -1;
+                }
+                mCurrentPathNode += mPathsStep;
+            }
+            //Seek行为
+            Vector3 desiredVelocity = (Paths[mCurrentPathNode].transform.position - transform.position).normalized * mMaxVelocity;
+            return Vector3.ClampMagnitude(desiredVelocity - mCurrentVelocity, mMaxSteerForce) / mMass;
+        }
+````
+
+效果展示：
+
+![GIF9](https://huskytgame.github.io/images/in-post/ai/2019-11-07-AI基础--Behavior/PathFollowingBehavior.gif)
+
+## 十一、LeaderFollowing领导跟随
+
