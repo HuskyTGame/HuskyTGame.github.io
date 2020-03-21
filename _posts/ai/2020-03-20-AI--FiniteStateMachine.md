@@ -16,7 +16,7 @@ image:
 
 有限状态机的相关概念就不做介绍了，了解即可。
 
-工程地址：[网盘](链接：https://pan.baidu.com/s/1NxqumpoqEve3ywMQdfP4ow)（提取码：79zj）
+工程地址：[网盘](https://pan.baidu.com/s/1NxqumpoqEve3ywMQdfP4ow)（提取码：79zj）
 
 # 二、FiniteStateMachine
 
