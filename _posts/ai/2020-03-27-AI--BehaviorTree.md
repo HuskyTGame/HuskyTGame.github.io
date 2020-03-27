@@ -1,727 +1,751 @@
 ---
 layout: article
-title:  "AI--FiniteStateMachine"
+title:  "AI--BehaviorTree"
 categories: ai
 image:
-    teaser: /in-post/ai/2020-03-20-AI--FiniteStateMachine/DefaultImg.jpg
+    teaser: /in-post/ai/2020-03-27-AI--BehaviorTree/DefaultImg.jpg
 ---
 
 # 目录
 
 [TOC]
 
+![GIF1](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/BehaviorTreeExample.gif)
+
 # 一、写在前面
 
-本文着重实现一个高度可配置的有限状态机（FiniteStateMachine）；然后借鉴 [Unity官方教程](https://learn.unity.com/tutorial/5c515373edbc2a001fd5c79d?tab=overview) 将其运用于 Unity 中。
+本文实现了一个简易的行为树框架。工程地址：[GitHub](https://github.com/HuskyTGame/CustomBehaviorTree) and [网盘](https://pan.baidu.com/s/124-kkyyPO-2uBgs6UvzBsQ)（提取码：yu6b）
 
-有限状态机的相关概念就不做介绍了，了解即可。
+包含以下内容：
 
-工程地址：[网盘](https://pan.baidu.com/s/1NxqumpoqEve3ywMQdfP4ow)（提取码：79zj）
+- **组合节点（CompositeNode）**
+  - *并行节点（ParallelNode*
+  
+  - *选择节点（SelectorNode）*
+  
+  - *序列节点（SequenceNode）*
+  
+- **修饰节点（DecoratorNode）**
+  - *循环节点（RepeatNode）*
+  
+  - *TOADD*
+  
+- **行为叶节点（ActonNode）**
 
-# 二、FiniteStateMachine
+- **前提条件（Precondition）**
 
-## 1.FSM 框架结构
+- **黑板（Blackboard）**
+
+行为树 较 FSM 有许多优势：
+
+- 1.更容易实现复杂 AI 逻辑。（若使用 FSM 会因 State 数量的增加导致 Transition 数量骤增，很难管理维护）
+- 2.行为树内部节点分为逻辑节点和行为节点：逻辑节点（组合节点 + 修饰节点）用于控制子节点运行逻辑；行为节点才是实现具体的 AI 行为。可以将行为节点模块化便于复用行为逻辑。（这一点 FSM 也可以办到）
+- 3.在理解行为树原理后，通过行为树可以快速直观的理解 AI 逻辑。（FSM 会因状态过多很难轻易理解各个 State 之间的转换逻辑）
+
+行为树也有他的不足之处：
+
+- 1.实现较为复杂，不过很多平台都有前人实现好的行为树框架。
+- 2.行为树需要好的设计，能让行为粒度在复用性和复杂性之间达到平衡。
+- 3.行为树层深过大的时候，需要不小的性能开销。
+- 4.行为树高度依赖于 AI 设计与编码，属于 “反应型 AI” ，在处理某些类型 AI 问题上不如 “协商型 AI”（GOAP、HTN） 方便。（不过 "协商型 AI" 也有不足：实现更复杂；AI 设计更考究；性能消耗与内部行为搜索算法和行动域大小高度相关）
+
+# 二、BehaviorTree
+
+## 1.行为树框架结构
 
 如下图所示：
 
-![picture0](https://huskytgame.github.io/images/in-post/ai/2020-03-20-AI--FiniteStateMachine/ScreenShot000.png)
+![picture0](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/ScreenShot000.png)
 
-``StateController`` 状态管理器：
+包含以下内容：
 
-- AI 的核心
-- 将 AI 系统的 **初始状态** 注入
-- 设置好 AI 的 **相关数据**（此后会将 ``StateController`` 注入到各个模块以提供 AI 相关数据）
-- 状态管理器的帧函数 ``UpdateAI`` 由外部（继承自 Monobehavior）的类调用
+（注意：每个节点都包含 3 种运行状态：Failed、Running、Finished）
 
-``StateBase`` 状态基类：处理各个状态的公共逻辑：
+- **组合节点（CompositeNode）：**
 
-- 存储 *状态* 的 **行动集合**（每个状态可能有多个行动组合而成）
-- 存储 *状态* 的 **转换条件集合**（每个状态可能有多种转换条件）
-- （必选）在子类中添加 行动集合 ``AddActions``
-- 在外部添加 转换条件集合 ``AddTransition``
-- 在内部处理状态帧函数``UpdateState``：执行动作``DoActions`` + 检验每个转换条件``CheckTransitions``
-- （可选）实现状态的生命周期函数：进入状态的``DoOnBefore`` + 退出状态的``DoOnExit``
+  用于控制多个子节点运行（遍历）逻辑。
 
-``ActionBase`` 动作基类：
+  - ***并行节点（ParallelNode）***：子节点可同时运行。
 
-- 将每个状态下的行为分解为各个动作的集合，有利于逻辑复用，更加模块化的处理也有利于 AI 行为的扩展。
+    只有当子节点返回指定个 Finished 时，并行节点状态才为 Finished。
 
-``Transition`` 转换条件：
+    若过多子节点返回 Failed 导致不可能有足够多子节点返回 Finished 时，并行节点返回 Failed。
 
-- 每个转换条件由：一个 **转换决策**``Decision`` 、一个 **转换成功后指向的状态**``TargetState`` 组成
+    （注意：并行节点在 Running 状态下，状态为 Running 和 Failed 的子节点每帧都会更新状态，状态为 Finished 的子节点不再更新状态）
 
-``DecisionBase`` 转换决策基类：
+  - ***选择节点（SelectorNode）***：子节点由前到后按顺序依次运行。
 
-- 转换条件 ``Transition`` 的核心组成部分
-- 用于处理状态之间转换的核心逻辑
+    当出现第一个返回 Finished 的子节点时，选择节点才返回 Finished。
 
-## 2.框架代码
+    若所有子节点均返回 Failed 时，选择节点返回 Failed。
 
-### StateController
+  - ***序列节点（SequenceNode）***：子节点由前到后按顺序依次运行。
+
+    当子节点依次返回 Finished 时，序列节点才返回 Finished。
+
+    若子节点返回 Failed，则序列节点返回 Failed。
+
+- **修饰节点（DecoratorNode）：**
+
+  用于 “修饰” 单个子节点的运行逻辑。
+
+  - ***循环节点（RepeatNode）***：子节点循环执行指定次数。
+
+    当子节点返回 Finished 时，循环节点循环执行，知道达到指定的循环次数。
+
+    当子节点返回 Failed 时，循环节点停止循环并返回 Failed。
+
+  - ***TOADD***：
+
+    还有其他的修饰节点，本文并未实现，不过很容易扩展出来。
+
+    例如：逆变节点（InverterNode）、成功节点（SucceederNode）等。
+
+- **行为叶节点（ActonNode）：**
+
+  位于行为树叶子节点位置的节点，真正用于执行 AI 行为逻辑的节点。
+
+  内部逻辑：
+
+  - 内部条件检测是否通过：``InternalCondition()``
+  - 执行``OnEnter()``（第一次执行当前节点时）
+  - 执行``OnExcute()``
+  - 执行``OnExit()``（退出当前节点时执行）
+
+- **前提条件（Precondition）：**
+
+  为节点添加额外的执行条件（外在前提条件）
+
+- **黑板（Blackboard）：**
+
+  用于各个节点之间数据通信。
+  
+  内部设置有数据的有效时间：若数据过期，则无法使用。
+
+## 2.行为树执行流程
+
+### （1）整体执行流程
+
+![picture1](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/ScreenShot001.png)
+
+### （2）行为叶节点（ActionNode）
+
+![picture2](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/ScreenShot002.png)
+
+### （3）并行节点（ParallelNode）——组合节点
+
+![picture3](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/ScreenShot003.png)
+
+### （4）选择节点（SelectorNode）——组合节点
+
+![picture4](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/ScreenShot004.png)
+
+### （5）序列节点（SequenceNode）——组合节点
+
+![picture5](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/ScreenShot005.png)
+
+### （6）循环节点（RepeatNode）——修饰节点
+
+![picture6](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/ScreenShot006.png)
+
+## 3.代码
+
+### （1）BTStarter 行为树启动器
 
 ````csharp
 /****************************************************
-	文件：StateController.cs
+	文件：BTStarter.cs
 	作者：HuskyT
 	邮箱：1005240602@qq.com
-	日期：2020/3/20 16:19:33
-	功能：状态管理器（AI Brain）
+	日期：2020/3/26 19:29:34
+	功能：行为树启动器（在帧循环中开启行为树）
 *****************************************************/
 
-using System;
-using UnityEngine;
+using HTUtility;
 
-namespace FiniteStateMachine
+namespace AI.BehaviorTree
 {
-    /*
-     * 状态管理器
-     * AI Brain
-     * 作用：AI 的状态控制器（核心类）
-     */
-    public class StateController
+    public class BTStarter : HTSingleton<BTStarter>
     {
-        private StateBase mCurrentState;
-        /// <summary>
-        /// AI 是否为激活状态
-        /// </summary>
-        private bool mAIActivate;
-        /// <summary>
-        /// 当前状态过去的时间（当前状态的计时器）
-        /// </summary>
-        private float mElapsedTime;
-
-        public StateController(StateBase originalState, params object[] args)
+        public void UpdateBT(NodeBase rootNode, IAgent agent, Blackboard bb)
         {
-            mCurrentState = originalState;
-            mAIActivate = true;
-            mElapsedTime = 0.0f;
-            //设置 AI 初始数据
-
-            Debug.Log("AI 初始化完毕");
-        }
-
-        public void SetupAI(bool aiActivate, params object[] args)
-        {
-            mAIActivate = aiActivate;
-            //设置 AI 数据
-        }
-
-        public void UpdateAI()
-        {
-            if (mAIActivate == false) return;
-            mCurrentState.UpdateState(this);
-        }
-        public void TransitionToState(StateBase targetState)
-        {
-            mCurrentState.DoOnExit(this);
-            mElapsedTime = 0.0f;//计时器清零
-            mCurrentState = targetState;
-            mCurrentState.DoOnBefore(this);
-        }
-        /// <summary>
-        /// 检测当前状态的计时器是否到达指定时间
-        /// </summary>
-        /// <param 指定时间="time"></param>
-        /// <returns></returns>
-        public bool CheckElapsedTime(float time)
-        {
-            return mElapsedTime >= time;
+            BTNodeStatus status = rootNode.Update(agent, bb);
+            //HTLogger.Debug(string.Format("根节点为：{0}的行为树运行状态为：{1}", rootNode, status));
         }
     }
 }
 ````
 
-### StateBase
+### （2）NodeBase 节点基类
 
 ````csharp
 /****************************************************
-	文件：StateBase.cs
+	文件：NodeBase.cs
 	作者：HuskyT
 	邮箱：1005240602@qq.com
-	日期：2020/3/20 15:55:28
-	功能：状态基类
+	日期：2020/3/25 22:47:16
+	功能：行为树节点（基类）
+*****************************************************/
+
+using System.Collections.Generic;
+
+namespace AI.BehaviorTree
+{
+    public abstract class NodeBase
+    {
+        /// <summary>
+        /// 父节点
+        /// </summary>
+        protected NodeBase mParent;
+        /// <summary>
+        /// 子节点列表
+        /// </summary>
+        protected List<NodeBase> mChildren = new List<NodeBase>();
+        /// <summary>
+        /// 前提条件（外在前提）
+        /// </summary>
+        protected IPrecondition mPrecondition;
+
+        public NodeBase()
+        {
+        }
+
+        /// <summary>
+        /// 添加子节点
+        /// </summary>
+        /// <param 子节点="node"></param>
+        public NodeBase AddChild(params NodeBase[] nodeArray)
+        {
+            for (int i = 0; i < nodeArray.Length; i++)
+            {
+                nodeArray[i].mParent = this;
+                mChildren.Add(nodeArray[i]);
+            }
+            return this;
+        }
+        /// <summary>
+        /// 设置节点的前提条件（外在前提）
+        /// </summary>
+        /// <param 前提条件="precondition"></param>
+        public NodeBase SetPrecondition(IPrecondition precondition)
+        {
+            mPrecondition = precondition;
+            return this;
+        }
+        public BTNodeStatus Update(IAgent agent, Blackboard bb)
+        {
+            //没有通过（外在）前提条件
+            if (mPrecondition != null && mPrecondition.IsTrue(agent) == false)
+                return BTNodeStatus.Failed;
+            return OnUpdate(agent, bb);
+        }
+        public void Reset(IAgent agent, Blackboard bb)
+        {
+            OnReset(agent, bb);
+        }
+        protected virtual BTNodeStatus OnUpdate(IAgent agent, Blackboard bb)
+        {
+            return BTNodeStatus.Finished;
+        }
+        protected virtual void OnReset(IAgent agent, Blackboard bb) { }
+    }
+}
+````
+
+### （3）ActionNode 行为叶节点
+
+````csharp
+/****************************************************
+	文件：ActionNode.cs
+	作者：HuskyT
+	邮箱：1005240602@qq.com
+	日期：2020/3/25 23:8:27
+	功能：行为节点（行为树叶节点）
+*****************************************************/
+
+namespace AI.BehaviorTree
+{
+    public class ActionNode : NodeBase
+    {
+        /// <summary>
+        /// 行为状态，在行为节点内部的状态
+        /// </summary>
+        public enum ActionStateEnum
+        {
+            /// <summary>
+            /// 第一次执行当前行为
+            /// </summary>
+            FirstIn,
+            /// <summary>
+            /// 非第一次执行当前行为
+            /// </summary>
+            NotFirstIn,
+        }
+
+        /// <summary>
+        /// 当前行为节点内部的状态，默认为 Ready 状态
+        /// </summary>
+        private ActionStateEnum mCurrentState = ActionStateEnum.FirstIn;
+
+        protected override BTNodeStatus OnUpdate(IAgent agent, Blackboard bb)
+        {
+            //内部条件检测未通过
+            if (InternalCondition(agent, bb) == false) return BTNodeStatus.Failed;
+
+            //第一次执行此行为
+            if(mCurrentState == ActionStateEnum.FirstIn)
+            {
+                OnEnter(agent, bb);
+                mCurrentState = ActionStateEnum.NotFirstIn;
+            }
+            BTNodeStatus status = BTNodeStatus.Finished;
+            //非第一次执行此行为
+            if (mCurrentState==ActionStateEnum.NotFirstIn)
+            {
+                status = OnExcute(agent, bb);
+            }
+            //若当前行为为持续性行为
+            if (status == BTNodeStatus.Running)
+            {
+                return status;//返回 Running
+            }
+            //当前行为已结束（非持续性行为）
+            else
+            {
+                //善后工作（执行退出 + 标志位重置）
+                OnReset(agent, bb);
+                return status;//返回 Finished
+            }
+        }
+        protected override void OnReset(IAgent agent, Blackboard bb)
+        {
+            if (mCurrentState == ActionStateEnum.NotFirstIn)
+            {
+                OnExit(agent, bb);//执行退出
+                mCurrentState = ActionStateEnum.FirstIn;//标志位重置
+            }
+        }
+
+        /// <summary>
+        /// 内部条件
+        /// </summary>
+        /// <param AI 实体="agent"></param>
+        /// <param 黑板数据="bb"></param>
+        /// <returns></returns>
+        protected virtual bool InternalCondition(IAgent agent, Blackboard bb)
+        {
+            return true;
+        }
+
+        #region 行为节点  生命周期函数
+        protected virtual void OnEnter(IAgent agent, Blackboard bb) { }
+        protected virtual BTNodeStatus OnExcute(IAgent agent, Blackboard bb)
+        {
+            return BTNodeStatus.Finished;
+        }
+        protected virtual void OnExit(IAgent agent, Blackboard bb) { }
+        #endregion
+    }
+}
+````
+
+### （4）ParallelNode 并行节点
+
+````csharp
+/****************************************************
+	文件：ParallelNode.cs
+	作者：HuskyT
+	邮箱：1005240602@qq.com
+	日期：2020/3/25 23:45:37
+	功能：并行节点（组合节点）
 *****************************************************/
 
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FiniteStateMachine
+namespace AI.BehaviorTree
 {
-    /*
-     * 状态基类
-     * 可创建不同 AI 对象特有的状态
-     * 作用：划分 AI 状态（内部处理每个状态独有的逻辑）
-     * 使用：在子类中设置 状态 包含的 动作集Actions ；转换条件集（Transitions）在外部设置
-     * 可选：在子类中实现 DoOnBefore 和 DoOnExit （状态 的 生命周期函数）
-     */
-    public abstract class StateBase
+    public class ParallelNode : NodeBase
     {
-        protected List<ActionBase> mActions;
-        protected List<Transition> mTransitions;
+        /// <summary>
+        /// 子节点需要完成多少个，并行节点才返回 Finished
+        /// </summary>
+        private int mNeedFinishedNumInChildren;
+        /// <summary>
+        /// 子节点运行状态列表
+        /// </summary>
+        private List<BTNodeStatus> mChildrenStatusList;
+        /// <summary>
+        /// 子节点中执行完成的个数
+        /// </summary>
+        protected int mFinishedNum;
+        /// <summary>
+        /// 子节点中执行失败的个数
+        /// </summary>
+        protected int mFailedNum;
 
-        public StateBase()
+        /// <summary>
+        /// 并行节点（参数：子节点需要完成多少个，并行节点才返回 Finished）
+        /// </summary>
+        /// <param 子节点需要完成多少个，并行节点才返回Finished="needFinishedNumInChildren"></param>
+        public ParallelNode(int needFinishedNumInChildren)
         {
-            mActions = new List<ActionBase>();
-            mTransitions = new List<Transition>();
-            AddActions();
+            mNeedFinishedNumInChildren = needFinishedNumInChildren;
+            mChildrenStatusList = new List<BTNodeStatus>();
+            mFinishedNum = 0;
+            mFailedNum = 0;
         }
 
-        public virtual void DoOnBefore(StateController controller) { }
-        public virtual void DoOnExit(StateController controller) { }
-        /// <summary>
-        /// 在子类中配置 状态 State 包含的 动作集（Actions）
-        /// </summary>
-        protected abstract void AddActions();
-        /// <summary>
-        /// 在子类中配置 状态 State 包含的 转换条件集（Transitions）
-        /// </summary>
-        public void AddTransition(Transition transition)
+        protected override BTNodeStatus OnUpdate(IAgent agent, Blackboard bb)
         {
-            for (int i = 0; i < mTransitions.Count; i++)
+            if (mChildren.Count == 0) return BTNodeStatus.Finished;
+            mNeedFinishedNumInChildren = Mathf.Clamp(mNeedFinishedNumInChildren, 1, mChildren.Count);
+            //第一次设置（初始化）子节点运行状态列表
+            if (mChildrenStatusList.Count != mChildren.Count)
             {
-                if (mTransitions[i] == transition)
+                for (int i = 0; i < mChildren.Count; i++)
                 {
-                    Debug.LogErrorFormat("{0}状态中已包含转换条件：{1}", this, transition.Decision.ToString());
-                    return;
+                    mChildrenStatusList.Add(BTNodeStatus.Running);
                 }
             }
-            mTransitions.Add(transition);
-            Debug.LogFormat("在{0}状态中添加转换条件：{1}", this, transition.Decision.ToString());
-        }
-        public void UpdateState(StateController controller)
-        {
-            DoActions(controller);
-            CheckTransitions(controller);
-        }
-        private void DoActions(StateController controller)
-        {
-            for (int i = 0; i < mActions.Count; i++)
+            mFinishedNum = 0;//重置  子节点中执行完成的个数
+            mFailedNum = 0;//重置  子节点中执行失败的个数
+            BTNodeStatus status;
+            for (int i = 0; i < mChildren.Count; i++)
             {
-                mActions[i].Act(controller);
-            }
-        }
-        private void CheckTransitions(StateController controller)
-        {
-            bool succeed = false;
-            //每次帧循环都会检测当前状态所有的转换条件
-            //若存在多个可以成功转换的 转换条件 时，选取第一个为成功转换的状态（此处可以修改选取规则）
-            for (int i = 0; i < mTransitions.Count; i++)
-            {
-                succeed = mTransitions[i].Decision.Decide(controller);
-                if (succeed)
+                status = mChildrenStatusList[i];
+                //1--子节点行为为持续性行为
+                if (status == BTNodeStatus.Running)
                 {
-                    controller.TransitionToState(mTransitions[i].TargetState);
-                    break;
+                    status = mChildren[i].Update(agent, bb);//更新子节点行为状态
+                }
+                //2--子节点行为已结束（非持续性行为/恰好结束的持续性行为）
+                if (status == BTNodeStatus.Finished)
+                {
+                    //更新  子节点行为状态  到  子节点运行状态列表
+                    //此步骤的目的：
+                    //并行节点在 Running 状态下的时候
+                    //状态为 Running 和 Failed 的子节点每帧都会更新状态
+                    //状态为 Finished 的子节点不再更新状态
+                    mChildrenStatusList[i] = BTNodeStatus.Finished;
+                    mFinishedNum += 1;
+                    //满足子节点需要完成的次数
+                    if (mFinishedNum == mNeedFinishedNumInChildren)
+                    {
+                        return BTNodeStatus.Finished;//返回 Finished
+                    }
+                }
+                //3--子节点行为失败（第一次更新该子节点时可能出现）
+                if (status == BTNodeStatus.Failed)
+                {
+                    //此处不更新  子节点运行状态列表
+                    //原因：运行状态为 Failed 的子节点在下一帧中还需要重新更新运行状态
+                    mFailedNum += 1;
+                    //若失败次数足够多
+                    if (mFailedNum > mChildren.Count - mNeedFinishedNumInChildren)
+                    {
+                        return BTNodeStatus.Failed;//返回 Failed
+                    }
                 }
             }
+            return BTNodeStatus.Running;//返回 Running
+        }
+        protected override void OnReset(IAgent agent, Blackboard bb)
+        {
+            for (int i = 0; i < mChildren.Count; i++)
+            {
+                mChildren[i].Reset(agent, bb);
+            }
+            mChildrenStatusList.Clear();
         }
     }
 }
 ````
 
-### ActionBase
+### （5）DecoratorNode 修饰节点
 
 ````csharp
 /****************************************************
-	文件：ActionBase.cs
+	文件：DecoratorNode.cs
 	作者：HuskyT
 	邮箱：1005240602@qq.com
-	日期：2020/3/20 16:23:4
-	功能：AI 的最小行为单元（抽象基类）
+	日期：2020/3/26 1:37:9
+	功能：修饰节点（基类）（修饰节点只有一个子节点）
 *****************************************************/
 
-namespace FiniteStateMachine
+namespace AI.BehaviorTree
 {
-    /*
-     *  AI 的最小行为单元（抽象基类）
-     *  作用：将 AI 行为尽可能拆分、模块化，便于拓展、复用。
-     */
-    public abstract class ActionBase
+    public class DecoratorNode : NodeBase
     {
-        public abstract void Act(StateController controller);
-    }
-}
-````
-
-### Transition
-
-````csharp
-/****************************************************
-	文件：Transition.cs
-	作者：HuskyT
-	邮箱：1005240602@qq.com
-	日期：2020/3/20 16:44:21
-	功能：转换条件
-*****************************************************/
-
-namespace FiniteStateMachine
-{
-    /*
-     * 转换条件
-     * 每个转换条件由：一个转换决策、一个转换成功后指向的状态 组成
-     */
-    public class Transition
-    {
-        private DecisionBase mDecision;
-        private StateBase mTargetState;
-        public DecisionBase Decision { get => mDecision; }
-        public StateBase TargetState { get => mTargetState; }
-        public Transition(DecisionBase decision, StateBase targetState)
-        {
-            mDecision = decision;
-            mTargetState = targetState;
-        }
-    }
-}
-````
-
-### Decision
-
-````csharp
-/****************************************************
-	文件：DecisionBase.cs
-	作者：HuskyT
-	邮箱：1005240602@qq.com
-	日期：2020/3/20 16:23:26
-	功能：转换决策（抽象基类）
-*****************************************************/
-
-namespace FiniteStateMachine
-{
-    /*
-     * 转换决策（抽象基类）
-     * 作用：为转换条件 Transition 的核心组成部分，用于处理状态之间转换的核心逻辑
-     */
-    public abstract class DecisionBase
-    {
-        public abstract bool Decide(StateController controller);
-    }
-}
-````
-
-## 3.案例
-
-实现一个追踪者（Hunter）的 AI ：
-
-- 包含两个状态：巡逻状态 + 追逐状态
-- 巡逻状态 由一个 Action 构成：巡逻行为
-- 追逐状态 由两个 Action 构成：追逐行为 + 攻击行为
-- 默认的初始状态为：巡逻状态
-- 当目标被发现时，Hunter 由 *巡逻状态* 切换为 *追逐状态*，追逐状态 下当满足 **攻击条件** 时可进行 *攻击行为* 。
-- 直到目标被消灭，Hunter 才会由 *追逐状态* 切换回 *巡逻状态*
-
-如下图所示：
-
-![picture1](https://huskytgame.github.io/images/in-post/ai/2020-03-20-AI--FiniteStateMachine/ScreenShot001.png)
-
-代码：（Action 和 Decision 的实现部分略）
-
-**HunterPatrolState：**
-
-````csharp
-using System;
-using UnityEngine;
-
-namespace FiniteStateMachine.Example1
-{
-    public class HunterPatrolState : StateBase
-    {
-        protected override void AddActions()
-        {
-            mActions.Add(new PatrolAction());
-            Debug.LogFormat("{0}的Action添加完毕", this);
-        }
-    }
-}
-````
-
-**HunterChaseState：**
-
-````csharp
-using System;
-using UnityEngine;
-
-namespace FiniteStateMachine.Example1
-{
-    public class HunterChaseState : StateBase
-    {
-        protected override void AddActions()
-        {
-            mActions.Add(new ChaseAction());
-            mActions.Add(new AttackAction());
-            Debug.LogFormat("{0}的Action添加完毕", this);
-        }
-    }
-}
-````
-
-**HunterController：**
-
-````csharp
-using System;
-using UnityEngine;
-
-namespace FiniteStateMachine.Example1
-{
-	public class HunterController : MonoBehaviour
-	{
-        private StateController mAI;
-		private void Start()
-		{
-            HunterPatrolState hunterPatrolState = new HunterPatrolState();
-            HunterChaseState hunterChaseState = new HunterChaseState();
-            hunterPatrolState.AddTransition(new Transition(new LookDecision(), hunterChaseState));
-            hunterChaseState.AddTransition(new Transition(new InactiveStateDecision(), hunterPatrolState));
-            mAI = new StateController(hunterPatrolState, null);
-		}
-        private void Update()
-        {
-            mAI.UpdateAI();
-        }
-    }
-}
-````
-
-# 三、SerializableFiniteStateMachine
-
-## 1.说明
-
-可序列化的有限状态机。可以在 Unity 编辑模式下进行 AI 的快速配置，有利于原型开发。
-
-状态机构建原理和之前的基本一致（Transition 部分略有区别，本质相同）
-
-## 2.框架代码
-
-### StateController
-
-````csharp
-/****************************************************
-	文件：StateController.cs
-	作者：HuskyT
-	邮箱：1005240602@qq.com
-	日期：2020/3/18 22:6:21
-	功能：状态管理器（AI Brain）
-*****************************************************/
-
-using System;
-using UnityEngine;
-
-namespace SerializableFiniteStateMachine
-{
-    /*
-     * 状态管理器
-     * AI Brain，直接挂载在 NPC 上
-     * 作用：AI 的状态控制器（核心类）
-     */
-    public class StateController : MonoBehaviour
-    {
-        [Tooltip("当前状态")]
-        public State CurrentState;
-        [Tooltip("预设的虚拟状态")]
-        public State RemainState;
-
         /// <summary>
-        /// AI 是否为激活状态
+        /// 当前修饰节点的子节点（修饰节点只有一个子节点）
         /// </summary>
-        private bool mAIActivate = false;
-        /// <summary>
-        /// 当前状态过去的时间（当前状态的计时器）
-        /// </summary>
-        private float mElapsedTime = 0.0f;
+        public NodeBase Child => mChildren[0];
+        public DecoratorNode(NodeBase child)
+        {
+            AddChild(child);
+        }
+    }
+}
+````
 
-        public void SetupAI(bool aiActivate, params object[] args)
+### （6）IPrecondition 前提条件接口
+
+````csharp
+/****************************************************
+	文件：IPrecondition.cs
+	作者：HuskyT
+	邮箱：1005240602@qq.com
+	日期：2020/3/25 22:31:58
+	功能：前提条件接口
+*****************************************************/
+
+namespace AI.BehaviorTree
+{
+    public interface IPrecondition
+    {
+        bool IsTrue(IAgent agent);
+    }
+}
+````
+
+### （7）Blackboard 黑板
+
+````csharp
+/****************************************************
+	文件：BlackboardItem.cs
+	作者：HuskyT
+	邮箱：1005240602@qq.com
+	日期：2020/3/25 18:50:33
+	功能：黑板内的单个数据项
+*****************************************************/
+
+using UnityEngine;
+
+namespace AI.BehaviorTree
+{
+    public class BlackboardItem
+    {
+        /// <summary>
+        /// 黑板数据有效的终止时间（部分黑板数据可能有有效期，超过有效期将无效）
+        /// </summary>
+        private float mExpiredValidTime;
+        private object mValue;
+        public void SetValue(object value, float validTime = -1.0f)
         {
-            mAIActivate = aiActivate;
-            //设置 AI 数据
-        }
-        private void Update()
-        {
-            if (mAIActivate == false) return;
-            CurrentState.UpdateState(this);
-        }
-        public void TransitionToState(State targetState)
-        {
-            if (targetState == RemainState) return;
-            CurrentState = targetState;
-            OnExitState();
+            if (validTime >= 0)//数据存在有效时间
+                //更新 黑板数据有效的终止时间
+                mExpiredValidTime = Time.time + validTime;
+            else
+                mExpiredValidTime = -1.0f;
+            mValue = value;
         }
         /// <summary>
-        /// 检测当前状态的计时器是否到达指定时间
+        /// 获取黑板数据
         /// </summary>
-        /// <param 指定时间="time"></param>
+        /// <typeparam 数据类型="T"></typeparam>
+        /// <param 默认数据="defaultValue"></param>
         /// <returns></returns>
-        public bool CheckElapsedTime(float time)
+        public T GetValue<T>(T defaultValue)
         {
-            mElapsedTime += Time.deltaTime;
-            return mElapsedTime >= time;
+            if (ValidValue())
+                return (T)mValue;
+            return defaultValue;
         }
-        private void OnExitState()
+        public bool ValidValue()
         {
-            mElapsedTime = 0.0f;//计时器清零
+            return mExpiredValidTime < 0 || mExpiredValidTime >= Time.time;
         }
     }
 }
 ````
 
-### State
+
 
 ````csharp
 /****************************************************
-	文件：State.cs
+	文件：Blackboard.cs
 	作者：HuskyT
 	邮箱：1005240602@qq.com
-	日期：2020/3/18 22:8:17
-	功能：状态
+	日期：2020/3/25 18:50:42
+	功能：黑板（包含行为树各个节点之间需要传递的信息）
 *****************************************************/
 
-using UnityEngine;
+using System.Collections.Generic;
 
-namespace SerializableFiniteStateMachine
+namespace AI.BehaviorTree
 {
-    /*
-     * 状态
-     * 可创建不同 AI 对象特有的状态，可序列化为 Asset 资产对象，便于在 Unity 编辑模式下配置 AI
-     * 作用：划分 AI 状态（内部处理每个状态独有的逻辑）
-     */
-    [CreateAssetMenu(fileName = "DefaultState", menuName = "SerializableFiniteStateMachine/States")]
-    public class State : ScriptableObject
+    public class Blackboard
     {
-        [Tooltip("该状态下的行动集合")]
-        public ActionBase[] Actions;
-        [Tooltip("该状态下的转换条件集合")]
-        public Transition[] Transitions;
+        /// <summary>
+        /// 缓存所有黑板数据项
+        /// </summary>
+        private Dictionary<int, BlackboardItem> mItems;
 
-        public void UpdateState(StateController controller)
+        public Blackboard()
         {
-            DoActions(controller);
-            CheckTransitions(controller);
+            mItems = new Dictionary<int, BlackboardItem>();
         }
 
-        private void DoActions(StateController controller)
+        /// <summary>
+        /// 设置黑板数据，若设置了有效时间，则有效时间到了之后数据将失效
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="value"></param>
+        /// <param 有效时间="validTime"></param>
+        public void SetValue(BlackboardKey key, object value, float validTime = -1.0f)
         {
-            for (int i = 0; i < Actions.Length; i++)
+            SetValue((int)key, value, validTime);
+        }
+        /// <summary>
+        /// 获取黑板数据
+        /// </summary>
+        public T GetValue<T>(BlackboardKey key, T defaultValue)
+        {
+            return GetValue<T>((int)key, defaultValue);
+        }
+        /// <summary>
+        /// 删除黑板数据
+        /// </summary>
+        public bool DeleteValue(BlackboardKey key)
+        {
+            return DeleteValue((int)key);
+        }
+        /// <summary>
+        /// 黑板中是否包含指定数据
+        /// </summary>
+        public bool ContainsValue(BlackboardKey key)
+        {
+            return ContainsValue((int)key);
+        }
+        /// <summary>
+        /// 尝试从黑板中获取指定数据
+        /// </summary>
+        public bool TryGetValue<T>(BlackboardKey key, out T value)
+        {
+            return TryGetValue<T>((int)key, out value);
+        }
+
+        /// <summary>
+        /// 设置黑板数据，若设置了有效时间，则有效时间到了之后数据将失效
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="value"></param>
+        /// <param 有效时间="validTime"></param>
+        public void SetValue(int key, object value, float validTime = -1.0f)
+        {
+            BlackboardItem item;
+            if (mItems.TryGetValue(key, out item) == false)
             {
-                Actions[i].Act(controller);
+                item = new BlackboardItem();
+                mItems.Add(key, item);
             }
+            item.SetValue(value, validTime);
         }
-        private void CheckTransitions(StateController controller)
+        /// <summary>
+        /// 获取黑板数据
+        /// </summary>
+        public T GetValue<T>(int key, T defaultValue)
         {
-            bool succeed = false;
-            //每次帧循环都会检测当前状态所有的转换条件
-            //若存在多个转换条件，且同时为 TrueState 时，选取最后一个 TrueState 为成功转换的状态（此处可以修改选取规则）
-            for (int i = 0; i < Transitions.Length; i++)
+            BlackboardItem item;
+            if (mItems.TryGetValue(key, out item) == false)
             {
-                succeed = Transitions[i].Decision.Decide(controller);
-                if (succeed)
-                {
-                    controller.TransitionToState(Transitions[i].TrueState);
-                }
-                else
-                {
-                    controller.TransitionToState(Transitions[i].FalseState);
-                }
+                return defaultValue;
             }
+            return item.GetValue<T>(defaultValue);
         }
-    }
-}
-````
-
-### ActionBase
-
-````csharp
-/****************************************************
-	文件：ActionBase.cs
-	作者：HuskyT
-	邮箱：1005240602@qq.com
-	日期：2020/3/18 22:7:18
-	功能：AI 的最小行为单元（抽象基类）
-*****************************************************/
-
-using UnityEngine;
-
-namespace SerializableFiniteStateMachine
-{
-    /*
-     * AI 的最小行为单元
-     * 抽象基类，子类可序列化为 Asset 资产对象
-     * 作用：将 AI 行为尽可能拆分、模块化，便于拓展、复用。
-     */
-    public abstract class ActionBase : ScriptableObject
-    {
-        public abstract void Act(StateController controller);
-    }
-}
-````
-
-### Transition
-
-````csharp
-/****************************************************
-	文件：Transition.cs
-	作者：HuskyT
-	邮箱：1005240602@qq.com
-	日期：2020/3/18 22:8:44
-	功能：转换条件
-*****************************************************/
-
-using UnityEngine;
-
-namespace SerializableFiniteStateMachine
-{
-    /*
-     * 转换条件
-     * 每个转换条件由：一个转换决策、一个转换成功后指向的状态、一个转换失败后指向的状态  组成
-     * 说明：加上可序列化标签是便于在 Unity 编辑模式下进行配置
-     */
-    [System.Serializable]
-    public class Transition
-    {
-        [Tooltip("转换决策")]
-        public DecisionBase Decision;
-        [Tooltip("转换成功后指向的状态")]
-        public State TrueState;
-        [Tooltip("转换失败后指向的状态")]
-        public State FalseState;
-    }
-}
-````
-
-### DecisionBase
-
-````csharp
-/****************************************************
-	文件：DecisionBase.cs
-	作者：HuskyT
-	邮箱：1005240602@qq.com
-	日期：2020/3/18 22:8:33
-	功能：转换决策（抽象基类）
-*****************************************************/
-
-using UnityEngine;
-
-namespace SerializableFiniteStateMachine
-{
-    /*
-     * 转换决策
-     * 抽象基类，子类可序列化为 Asset 资产对象
-     * 作用：为转换条件 Transition 的核心组成部分，用于处理状态之间转换的核心逻辑
-     */
-    public abstract class DecisionBase : ScriptableObject
-    {
-        public abstract bool Decide(StateController controller);
-    }
-}
-````
-
-## 3.案例
-
-### （1）说明
-
-新增一个扫描者（Scanner）的 AI ：
-
-- 包含三个状态：巡逻状态 + 追逐状态 + 警戒状态
-- 巡逻状态 由一个 Action 构成：巡逻行为
-- 追逐状态 由两个 Action 构成：追逐行为 + 攻击行为
-- 警戒状态 没有行为
-- 默认的初始状态为：巡逻状态
-- 当目标被发现时，Scanner 由 *巡逻状态* 切换为 *追逐状态*，追逐状态 下当满足 **攻击条件** 时可进行 *攻击行为* 。
-- 当失去目标踪迹时，Scanner 由 *追逐状态* 切换为 *警戒状态*
-- 警戒状态下，Scanner 会进行 扫描搜索 目标：如果扫描结束依旧没有发现目标则由 *警戒状态* 切换回 *巡逻状态* ；如果扫描过程中发现了目标，则由 *警戒状态* 切换回 *追逐状态*
-
-如下图所示：
-
-![picture2](https://huskytgame.github.io/images/in-post/ai/2020-03-20-AI--FiniteStateMachine/ScreenShot002.png)
-
-### （2）在 Unity 编辑模式下配置 AI
-
-**Hierarchy：**
-
-![picture3](https://huskytgame.github.io/images/in-post/ai/2020-03-20-AI--FiniteStateMachine/ScreenShot003.png)
-
-**各个状态：**
-
-*ScannerPatrolState*：
-
-![picture4](https://huskytgame.github.io/images/in-post/ai/2020-03-20-AI--FiniteStateMachine/ScreenShot004.png)
-
-*ScannerChaseState*：
-
-![picture5](https://huskytgame.github.io/images/in-post/ai/2020-03-20-AI--FiniteStateMachine/ScreenShot005.png)
-
-*ScannerAlertState*：
-
-![picture6](https://huskytgame.github.io/images/in-post/ai/2020-03-20-AI--FiniteStateMachine/ScreenShot006.png)
-
-### （3）代码
-
-#### PatrolAction
-
-````csharp
-/****************************************************
-	文件：PatrolAction.cs
-	作者：HuskyT
-	邮箱：1005240602@qq.com
-	日期：2020/3/18 23:44:27
-	功能：巡逻 Action
-*****************************************************/
-
-using System;
-using UnityEngine;
-
-namespace SerializableFiniteStateMachine.Example1
-{
-    [CreateAssetMenu(fileName = "PatrolAction", menuName = "SerializableFiniteStateMachine/Actions/PatrolAction")]
-    public class PatrolAction : ActionBase
-    {
-        public override void Act(StateController controller)
+        /// <summary>
+        /// 删除黑板数据
+        /// </summary>
+        public bool DeleteValue(int key)
         {
-            Patrol(controller);
+            return mItems.Remove(key);
         }
-        private void Patrol(StateController controller)
+        /// <summary>
+        /// 黑板中是否包含指定数据
+        /// </summary>
+        public bool ContainsValue(int key)
         {
-            //巡逻逻辑
+            if (mItems.ContainsKey(key) == false)
+                return false;
+            return mItems[key].ValidValue();
+        }
+        /// <summary>
+        /// 尝试从黑板中获取指定数据
+        /// </summary>
+        public bool TryGetValue<T>(int key, out T value)
+        {
+            BlackboardItem item;
+            if (mItems.TryGetValue(key, out item) == false || item.ValidValue() == false)
+            {
+                value = default(T);
+                return false;
+            }
+            value = item.GetValue<T>(default(T));
+            return true;
         }
     }
 }
 ````
 
-#### ScanDecision
+## 4.案例
+
+### （1）运行效果
+
+说明：
+
+AI 有自己的需求：Food、Water、Energy、Mood、Money
+
+不同的行为会影响不同需求的数值。
+
+红色区域可以增加 Food；蓝色区域可以增加 Water；白色区域可以增加 Energy；绿色区域可以增加 Mood；黄色区域可以增加 Money。
+
+![GIF1](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/BehaviorTreeExample.gif)
+
+### （2）行为树图
+
+![picture7](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/ScreenShot007.png)
+
+### （3）构建行为树
+
+![picture8](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/ScreenShot008.png)
 
 ````csharp
-/****************************************************
-	文件：ScanDecision.cs
-	作者：HuskyT
-	邮箱：1005240602@qq.com
-	日期：2020/3/19 0:22:2
-	功能：扫描 转换决策
-*****************************************************/
-
-using System;
-using UnityEngine;
-
-namespace SerializableFiniteStateMachine.Example1
+private void Update()
 {
-    [CreateAssetMenu(fileName = "ScanDecision", menuName = "SerializableFiniteStateMachine/Decisions/ScanDecision")]
-    public class ScanDecision : DecisionBase
-    {
-        public override bool Decide(StateController controller)
-        {
-            return Scan(controller);
-        }
-        private bool Scan(StateController controller)
-        {
-            //扫描逻辑
-            return false;
-        }
-    }
+    if (mIsActive == false) return;
+    UpdateMovement();
+    UpdateTurnAround();
+    BTStarter.Instance.UpdateBT(mRootNode, this, mBlackboard);
+}
+private void BuildBehaviorTree()
+{
+    mBlackboard = new Blackboard();
+    mRootNode = new RepeatNode(
+        new ParallelNode(1)
+        .AddChild(new SelectorNode()
+                  .AddChild(new SequenceNode()
+                            .AddChild(new FeelBoring(), new WalkTo(), new HaveFun())
+                            , new SequenceNode()
+                            .AddChild(new FeelHungry(), new WalkTo(), new EatFood())
+                            , new SequenceNode()
+                            .AddChild(new FeelThirsty(), new WalkTo(), new DrinkWater())
+                            , new SequenceNode()
+                            .AddChild(new FeelTired(), new WalkTo(), new HaveRest())
+                            , new SequenceNode()
+                            .AddChild(new FeelPoor(), new WalkTo(), new Work())
+                           )
+                  , new Alive())
+        , 0);
+    HTLogger.Info("AI 行为树构建完成！");
 }
 ````
 
-# 四、写在最后
 
-如果 AI 的状态不复杂，使用 FSM 来构建 AI 是一件很高效的事情。利用 Unity 的可序列化功能能使 AI 的配置更为方便直观。
 
-在 FSM 的基础上也可以很容易得扩展出 分层有限状态机。
+
+
+
 
 
 
@@ -729,6 +753,11 @@ namespace SerializableFiniteStateMachine.Example1
 
 Reference
 
-[Unity官方教程](https://learn.unity.com/tutorial/5c515373edbc2a001fd5c79d?tab=overview)
+[AI 行为树的工作原理](https://indienova.com/indie-game-development/ai-behavior-trees-how-they-work/)
 
-[Unity录播](https://v.qq.com/x/page/c0537cidpg9.html)
+[用800行代码做个行为树（Behavior Tree）的库](http://www.aisharing.com/archives/517)
+
+[黑板和共享数据](http://www.aisharing.com/archives/801)
+
+[游戏AI - 行为树Part2：框架](https://zhuanlan.zhihu.com/p/19891875)
+
