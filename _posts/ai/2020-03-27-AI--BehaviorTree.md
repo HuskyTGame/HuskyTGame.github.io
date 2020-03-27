@@ -700,7 +700,7 @@ AI 有自己的需求：Food、Water、Energy、Mood、Money
 
 红色区域可以增加 Food；蓝色区域可以增加 Water；白色区域可以增加 Energy；绿色区域可以增加 Mood；黄色区域可以增加 Money。
 
-![GIF1](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/BehaviorTreeExample.gif)
+![GIF2](https://huskytgame.github.io/images/in-post/ai/2020-03-27-AI--BehaviorTree/BehaviorTreeExample2.gif)
 
 ### （2）行为树图
 
